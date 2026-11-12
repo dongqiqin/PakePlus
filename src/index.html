@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>运动记录</title>
+<style>
+body{font-family:sans-serif;margin:0;padding:12px;background:#f4f6f8;font-size:15px}
+.card{background:#fff;border-radius:8px;padding:12px;margin-bottom:10px}
+button{padding:9px 14px;margin:4px 3px;border:0;border-radius:6px;background:#0f7b6c;color:#fff;font-size:14px;cursor:pointer}
+input,select{width:100%;padding:9px;margin:4px 0;border:1px solid #ccc;border-radius:6px;font-size:14px;box-sizing:border-box}
+.log{background:#e8f5e9;font-size:12px;padding:8px;border-radius:6px;margin-bottom:10px;max-height:110px;overflow:auto;line-height:1.6}
+.hidden{display:none}
+.item{padding:7px 0;border-bottom:1px solid #eee;font-size:14px}
+h3{margin:0 0 8px;font-size:15px;color:#0f7b6c}
+</style>
+</head>
+<body>
+<div id="log" class="log">启动中…</div>
+
+<div id="tabs">
+  <button data-p="p1">成员</button>
+  <button data-p="p2">记录</button>
+  <button data-p="p3">报告</button>
+</div>
+
+<div id="p1" class="card">
+  <h3>添加成员</h3>
+  <input id="name" placeholder="姓名">
+  <select id="gender"><option>男</option><option>女</option><option>其他</option></select>
+  <input id="birth" placeholder="出生日期 YYYY-MM-DD">
+  <button id="addMember">添加成员</button>
+  <div id="memberList"></div>
+</div>
+
+<div id="p2" class="card hidden">
+  <h3>添加记录</h3>
+  <select id="memberSel"></select>
+  <select id="type"><option>跑步</option><option>快走</option><option>骑行</option><option>游泳</option><option>力量训练</option><option>其他</option></select>
+  <input id="date" placeholder="日期 YYYY-MM-DD">
+  <input id="dur" type="number" placeholder="时长（分钟）">
+  <input id="hr" type="number" placeholder="平均心率（次/分）">
+  <button id="addRecord">保存记录</button>
+  <div id="recordList"></div>
+</div>
+
+<div id="p3" class="card hidden">
+  <h3>个人报告</h3>
+  <select id="reportSel"></select>
+  <div id="reportBody"></div>
+</div>
+
+<script>
+var logEl = document.getElementById('log');
+function log(s){ logEl.innerHTML += '<br>' + s; }
+log('脚本开始');
+
+var db = { members: [], records: [] };
+try {
+  var saved = localStorage.getItem('sport-lite');
+  if (saved) db = JSON.parse(saved);
+  log('读取本地数据：' + db.members.length + ' 成员，' + db.records.length + ' 记录');
+} catch(e) { log('读取失败：' + e.message); }
+
+function save(){
+  try { localStorage.setItem('sport-lite', JSON.stringify(db)); log('已保存到本地'); return true; }
+  catch(e){ log('保存失败：' + e.message); return false; }
+}
+
+var tabs = document.querySelectorAll('#tabs button');
+for (var i = 0; i < tabs.length; i++) {
+  tabs[i].onclick = function(){
+    var target = this.getAttribute('data-p');
+    log('切换：' + target);
+    var pages = ['p1','p2','p3'];
+    for (var j = 0; j < pages.length; j++) {
+      document.getElementById(pages[j]).className = (pages[j] === target) ? 'card' : 'card hidden';
+    }
+    if (target === 'p3') renderReport();
+  };
+}
+
+document.getElementById('addMember').onclick = function(){
+  var name = document.getElementById('name').value.replace(/^\s+|\s+$/g,'');
+  if (!name) { alert('请填写姓名'); return; }
+  db.members.push({ id: 'm' + Date.now() + Math.random().toString(36).slice(2,6),
+    name: name,
+    gender: document.getElementById('gender').value,
+    birth: document.getElementById('birth').value.replace(/^\s+|\s+$/g,'') });
+  save();
+  document.getElementById('name').value = '';
+  log('添加成员：' + name);
+  renderMembers();
+};
+
+function renderMembers(){
+  var html = '';
+  for (var i = 0; i < db.members.length; i++) {
+    var m = db.members[i];
+    html += '<div class="item">' + m.name + ' · ' + m.gender + ' · ' + (m.birth || '未填生日') + '</div>';
+  }
+  document.getElementById('memberList').innerHTML = html || '<p style="color:#999">暂无成员</p>';
+  log('成员列表刷新：' + db.members.length + ' 人');
+  var sel = document.getElementById('memberSel');
+  var opt = '';
+  for (var k = 0; k < db.members.length; k++) {
+    opt += '<option value="' + db.members[k].id + '">' + db.members[k].name + '</option>';
+  }
+  sel.innerHTML = opt || '<option value="">请先添加成员</option>';
+}
+
+document.getElementById('addRecord').onclick = function(){
+  var memberId = document.getElementById('memberSel').value;
+  if (!memberId) { alert('请先添加成员'); return; }
+  var dur = Number(document.getElementById('dur').value);
+  var hr = Number(document.getElementById('hr').value);
+  if (!(dur > 0) || !(hr > 0)) { alert('请填写有效的时长和心率'); return; }
+  db.records.push({
+    id: 'r' + Date.now() + Math.random().toString(36).slice(2,6),
+    memberId: memberId,
+    type: document.getElementById('type').value,
+    date: document.getElementById('date').value.replace(/^\s+|\s+$/g,''),
+    duration: dur,
+    heartRate: hr
+  });
+  save();
+  document.getElementById('dur').value = '';
+  document.getElementById('hr').value = '';
+  log('添加记录：' + dur + ' 分钟，' + hr + ' 次/分');
+  renderRecords();
+};
+
+function renderRecords(){
+  var html = '';
+  for (var i = 0; i < db.records.length; i++) {
+    var r = db.records[i], nm = '未知';
+    for (var j = 0; j < db.members.length; j++) {
+      if (db.members[j].id === r.memberId) { nm = db.members[j].name; break; }
+    }
+    html += '<div class="item">' + nm + ' · ' + r.type + ' · ' + r.date + ' · ' + r.duration + ' 分钟 · ' + r.heartRate + ' 次/分</div>';
+  }
+  document.getElementById('recordList').innerHTML = html || '<p style="color:#999">暂无记录</p>';
+  log('记录列表刷新：' + db.records.length + ' 条');
+}
+
+document.getElementById('reportSel').onchange = renderReport;
+
+function renderReport(){
+  var sel = document.getElementById('reportSel');
+  var opt = '';
+  for (var i = 0; i < db.members.length; i++) {
+    opt += '<option value="' + db.members[i].id + '">' + db.members[i].name + '</option>';
+  }
+  if (!opt) { document.getElementById('reportBody').innerHTML = '<p style="color:#999">请先添加成员</p>'; return; }
+  sel.innerHTML = opt;
+  var mid = sel.value, m = null;
+  for (var j = 0; j < db.members.length; j++) if (db.members[j].id === mid) { m = db.members[j]; break; }
+  var rs = [];
+  for (var k = 0; k < db.records.length; k++) if (db.records[k].memberId === mid) rs.push(db.records[k]);
+  if (!rs.length) { document.getElementById('reportBody').innerHTML = '<p style="color:#999">' + m.name + ' 还没有记录</p>'; return; }
+  var total = 0, hrSum = 0;
+  for (var x = 0; x < rs.length; x++) { total += rs[x].duration; hrSum += rs[x].heartRate * rs[x].duration; }
+  var avgHR = Math.round(hrSum / total);
+  document.getElementById('reportBody').innerHTML =
+    '<h3>' + m.name + ' 的报告</h3>' +
+    '<div class="item">运动次数：' + rs.length + '</div>' +
+    '<div class="item">累计时长：' + total + ' 分钟</div>' +
+    '<div class="item">平均心率：' + avgHR + ' 次/分</div>' +
+    '<div class="item">性别：' + m.gender + ' · 生日：' + (m.birth || '未填') + '</div>';
+  log('报告已生成：' + m.name);
+}
+
+renderMembers();
+renderRecords();
+log('初始化完成 ✅ 现在可以点上方按钮测试');
+</script>
+</body>
+</html>
